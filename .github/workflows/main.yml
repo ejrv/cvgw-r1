@@ -1,0 +1,80 @@
+name: Generate V2Ray Config
+
+on:
+  workflow_dispatch:
+    inputs:
+      remark:
+        description: 'نام یا توضیح برای این کانفیگ'
+        required: false
+        default: 'V2Ray-Config'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install uuid
+
+      - name: Generate V2Ray Config
+        run: |
+          import json
+          import uuid
+          import base64
+          import os
+
+          remark = "${{ github.event.inputs.remark }}"
+          if not remark:
+              remark = "V2Ray-Config"
+
+          # تولید UUID تصادفی
+          uuid_str = str(uuid.uuid4())
+          
+          # تنظیمات V2Ray (پروتکل VMess)
+          # نکته: این یک کانفیگ پایه است. برای استفاده واقعی، نیاز به تنظیمات دقیق‌تری داری.
+          # اما برای تست و تولید لینک، این کافیه.
+          
+          # ساخت لینک VMess
+          # فرمت لینک: vmess://base64(json_config)
+          
+          config = {
+              "v": "2",
+              "ps": remark,
+              "add": "127.0.0.1", # آدرس لوکال، چون سرور روی همان ماشین اجرا می‌شود
+              "port": "8080", # پورت پیش‌فرض
+              "id": uuid_str,
+              "aid": "0",
+              "net": "tcp",
+              "type": "none",
+              "host": "",
+              "path": "",
+              "tls": "none"
+          }
+          
+          # تبدیل به base64
+          json_config = json.dumps(config, separators=(',', ':'))
+          encoded_config = base64.b64encode(json_config.encode()).decode()
+          
+          link = f"vmess://{encoded_config}"
+          
+          # ذخیره لینک در فایل
+          with open("v2ray_link.txt", "w", encoding="utf-8") as f:
+              f.write(link)
+              
+          print(f"Link generated: {link}")
+
+      - name: Commit and Push
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add v2ray_link.txt
+          git commit -m "Updated V2Ray link" || true
+          git push
