@@ -1,10 +1,10 @@
-name: Generate V2Ray Config
+name: Generate V2Ray Link
 
 on:
   workflow_dispatch:
     inputs:
       remark:
-        description: 'نام یا توضیح برای این کانفیگ'
+        description: 'نام کانفیگ'
         required: false
         default: 'V2Ray-Config'
 
@@ -15,66 +15,52 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+      - name: Install jq
+        run: sudo apt-get install -y jq
 
-      - name: Install Dependencies
+      - name: Generate V2Ray Link
         run: |
-          pip install uuid
-
-      - name: Generate V2Ray Config
-        run: |
-          import json
-          import uuid
-          import base64
-          import os
-
-          remark = "${{ github.event.inputs.remark }}"
-          if not remark:
-              remark = "V2Ray-Config"
-
+          # دریافت نام کانفیگ از ورودی
+          REMARK="${{ github.event.inputs.remark }}"
+          
           # تولید UUID تصادفی
-          uuid_str = str(uuid.uuid4())
+          UUID=$(cat /proc/sys/kernel/random/uuid)
           
-          # تنظیمات V2Ray (پروتکل VMess)
-          # نکته: این یک کانفیگ پایه است. برای استفاده واقعی، نیاز به تنظیمات دقیق‌تری داری.
-          # اما برای تست و تولید لینک، این کافیه.
-          
-          # ساخت لینک VMess
-          # فرمت لینک: vmess://base64(json_config)
-          
-          config = {
+          # ساخت JSON کانفیگ VMess
+          # نکته: آدرس (add) را روی یک دامنه فرضی گذاشتیم. برای استفاده واقعی باید آن را تغییر دهی.
+          CONFIG=$(jq -n \
+            --arg ps "$REMARK" \
+            --arg id "$UUID" \
+            '{
               "v": "2",
-              "ps": remark,
-              "add": "127.0.0.1", # آدرس لوکال، چون سرور روی همان ماشین اجرا می‌شود
-              "port": "8080", # پورت پیش‌فرض
-              "id": uuid_str,
+              "ps": $ps,
+              "add": "example.com",
+              "port": "443",
+              "id": $id,
               "aid": "0",
-              "net": "tcp",
+              "net": "ws",
               "type": "none",
               "host": "",
-              "path": "",
-              "tls": "none"
-          }
+              "path": "/",
+              "tls": "tls"
+            }')
           
-          # تبدیل به base64
-          json_config = json.dumps(config, separators=(',', ':'))
-          encoded_config = base64.b64encode(json_config.encode()).decode()
+          # تبدیل JSON به Base64
+          ENCODED=$(echo -n "$CONFIG" | base64 -w 0)
           
-          link = f"vmess://{encoded_config}"
+          # ساخت لینک نهایی
+          LINK="vmess://${ENCODED}"
           
           # ذخیره لینک در فایل
-          with open("v2ray_link.txt", "w", encoding="utf-8") as f:
-              f.write(link)
-              
-          print(f"Link generated: {link}")
+          echo "$LINK" > v2ray_link.txt
+          
+          # نمایش لینک در لاگ
+          echo "Generated Link: $LINK"
 
       - name: Commit and Push
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add v2ray_link.txt
-          git commit -m "Updated V2Ray link" || true
+          git commit -m "Update V2Ray link" || true
           git push
